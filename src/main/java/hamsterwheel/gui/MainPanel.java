@@ -32,7 +32,7 @@ public class MainPanel extends JPanel implements KeyListener {
     private boolean stationary = true;
     private int pollingRate, fps, repaintCounter = 0, maxPollingRate = 0, pollingRateClass = 0, avgPollingRate = 0, longestJump = 0, shortestJump = Integer.MAX_VALUE,
             rgbCycle = 0, currentAcceleration = 0, highestAcceleration = 0, lastJump;
-    private long lastTimeMoved = System.nanoTime(), lastTimeStationary = System.nanoTime();
+    private long lastTimeMoved = System.nanoTime(), lastTimeStationary = System.nanoTime(), totalRate = 0, totalCnt = 0;
 
     private List<Integer> last5pollingRates = new ArrayList<Integer>();
 
@@ -123,13 +123,16 @@ public class MainPanel extends JPanel implements KeyListener {
     }
 
     private void calculateAveragePollingRate(Integer mouseUpdateFrequency) {
-        last5pollingRates.add(mouseUpdateFrequency);
-        if (last5pollingRates.size() > 4) last5pollingRates.remove(0);
-        avgPollingRate = 0;
-        for (int i = 0; i < last5pollingRates.size(); i++) {
-            avgPollingRate += last5pollingRates.get(i);
-        }
-        avgPollingRate /= last5pollingRates.size();
+        // last5pollingRates.add(mouseUpdateFrequency);
+        // if (last5pollingRates.size() > 4) last5pollingRates.remove(0);
+        // avgPollingRate = 0;
+        // for (int i = 0; i < last5pollingRates.size(); i++) {
+        //     avgPollingRate += last5pollingRates.get(i);
+        // }
+        // avgPollingRate /= last5pollingRates.size();
+        totalRate += mouseUpdateFrequency;
+        totalCnt++;
+        avgPollingRate = (int) (totalRate / totalCnt);
     }
 
     private void startPainterThread() {
@@ -531,6 +534,8 @@ public class MainPanel extends JPanel implements KeyListener {
         pollingRateClass = 0;
         longestJump = 0;
         highestAcceleration = 0;
+        totalRate = 0;
+        totalCnt = 0;
     }
 
     private Point scalePosition(Point position) {
