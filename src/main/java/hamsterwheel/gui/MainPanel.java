@@ -30,9 +30,9 @@ public class MainPanel extends JPanel implements KeyListener {
     private Color cursorColor = Color.RED, cursorButtonPressedColor = Color.BLUE, coordinateColor = Color.decode("#db50eb"), coordinateButtonPressedColor = Color.BLUE,
             inchGridColor = Color.decode("#b33d8b"), pixelGridColor = Color.decode("#545fa8"), textColor = Color.BLACK, darkModeTextColor = Color.WHITE;
     private boolean stationary = true;
-    private int pollingRate, fps, repaintCounter = 0, maxPollingRate = 0, pollingRateClass = 0, avgPollingRate = 0, longestJump = 0, shortestJump = Integer.MAX_VALUE,
+    private int pollingRate, fps, repaintCounter = 0, maxPollingRate = 0, pollingRateClass = 0, longestJump = 0, shortestJump = Integer.MAX_VALUE,
             rgbCycle = 0, currentAcceleration = 0, highestAcceleration = 0, lastJump;
-    private long lastTimeMoved = System.nanoTime(), lastTimeStationary = System.nanoTime(), totalRate = 0, totalCnt = 0;
+    private long lastTimeMoved = System.nanoTime(), lastTimeStationary = System.nanoTime(), totalRate = 0, totalCnt = 0, avgPollingRate = 0;
 
     private List<Integer> last5pollingRates = new ArrayList<Integer>();
 
@@ -113,8 +113,14 @@ public class MainPanel extends JPanel implements KeyListener {
 
         while (true) {
             if (mouseUpdateFrequency < pollRateClassLimit) {
-                if (pollRateClass > this.pollingRateClass) this.pollingRateClass = pollRateClass;
-                else break;
+                if (pollRateClass > this.pollingRateClass) {
+                    this.pollingRateClass = pollRateClass;
+                    totalRate = 0;
+                    totalCnt = 0;
+                    avgPollingRate = 0;
+                } else {
+                    break;
+                }
             } else {
                 pollRateClassLimit *= 2;
                 pollRateClass *= 2;
@@ -130,9 +136,12 @@ public class MainPanel extends JPanel implements KeyListener {
         //     avgPollingRate += last5pollingRates.get(i);
         // }
         // avgPollingRate /= last5pollingRates.size();
+
+        // Log.info("Frequency = %d".formatted(mouseUpdateFrequency));
+        if (mouseUpdateFrequency == 0) return;
         totalRate += mouseUpdateFrequency;
         totalCnt++;
-        avgPollingRate = (int) (totalRate / totalCnt);
+        avgPollingRate = totalRate / totalCnt;
     }
 
     private void startPainterThread() {
