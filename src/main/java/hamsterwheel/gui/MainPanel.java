@@ -18,7 +18,7 @@ import java.util.List;
 public class MainPanel extends JPanel implements KeyListener {
 
     private static final long NANOS_TO_STATIONARY = 1000000000;
-    private static final int COORDINATE_BACKLOG_LENGTH = 1000;
+    private static final int COORDINATE_BACKLOG_LENGTH = 1000000000;
 
     private Config config;
     private MouseLocator mouseLocator;
