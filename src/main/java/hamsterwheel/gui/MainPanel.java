@@ -32,7 +32,7 @@ public class MainPanel extends JPanel implements KeyListener {
     private boolean stationary = true;
     private int pollingRate, fps, repaintCounter = 0, maxPollingRate = 0, pollingRateClass = 0, longestJump = 0, shortestJump = Integer.MAX_VALUE,
             rgbCycle = 0, currentAcceleration = 0, highestAcceleration = 0, lastJump;
-    private long lastTimeMoved = System.nanoTime(), lastTimeStationary = System.nanoTime(), totalRate = 0, totalCnt = 0, avgPollingRate = 0;
+    private long lastTimeMoved = System.nanoTime(), lastTimeStationary = System.nanoTime(), totalRate = 0, totalCnt = 0, avgPollingRate = 0, positionCnt = 0;
 
     private List<Integer> last5pollingRates = new ArrayList<Integer>();
 
@@ -64,7 +64,7 @@ public class MainPanel extends JPanel implements KeyListener {
         if (pollingRate > maxPollingRate) maxPollingRate = pollingRate;
         calculateAveragePollingRate(pollingRate);
         calculatePollingRateClass(pollingRate);
-
+        positionCnt++;
     }
 
     private void startStationaryTimer() {
@@ -235,7 +235,7 @@ public class MainPanel extends JPanel implements KeyListener {
             stringBuilder.append("│ Version              %8s                         │\n".formatted(Controller.VERSION));
             stringBuilder.append("│                                                       │\n");
             stringBuilder.append("│ Made with love by BitDani                             │\n");
-            stringBuilder.append("│ github.com/szabodanika/HamsterWheel                   │\n");
+            stringBuilder.append("│ Position Count       %8d                         │\n".formatted(positionCnt));
         }
         stringBuilder.append("└───────────────────────────────────────────────────────┘\n");
         stringBuilder.append("\n");
@@ -537,6 +537,7 @@ public class MainPanel extends JPanel implements KeyListener {
 
     private void resetStats() {
         latestUpdate.setPrevious(null);
+        pollingRate = 0;
         avgPollingRate = 0;
         shortestJump = Integer.MAX_VALUE;
         maxPollingRate = 0;
@@ -545,6 +546,7 @@ public class MainPanel extends JPanel implements KeyListener {
         highestAcceleration = 0;
         totalRate = 0;
         totalCnt = 0;
+        positionCnt = 0;
     }
 
     private Point scalePosition(Point position) {
