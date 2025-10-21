@@ -230,11 +230,11 @@ public class MainPanel extends JPanel implements KeyListener {
 
     private void paintUI(Graphics2D g2d) {
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("┌── HAMSTER WHEEL   F1 ─────────────────────────────────┐\n");
+        stringBuilder.append("┌── MouseX   F1 ────────────────────────────────────────┐\n");
         if (config.isShowTitlePanel()) {
             stringBuilder.append("│ Version              %8s                         │\n".formatted(Controller.VERSION));
             stringBuilder.append("│                                                       │\n");
-            stringBuilder.append("│ Made with love by BitDani                             │\n");
+            stringBuilder.append("│ Made with love by LiuHuang                            │\n");
             stringBuilder.append("│ Position Count       %8d                         │\n".formatted(positionCnt));
         }
         stringBuilder.append("└───────────────────────────────────────────────────────┘\n");
