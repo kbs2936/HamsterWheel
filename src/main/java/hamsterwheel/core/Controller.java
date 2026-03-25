@@ -9,7 +9,7 @@ import java.io.IOException;
 
 public class Controller {
 
-    public static final String VERSION = "v1.2";
+    public static final String VERSION = "v1.3";
 
     private static Config config;
     private static MainFrame gui;

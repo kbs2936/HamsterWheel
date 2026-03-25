@@ -185,7 +185,7 @@ public class Config {
     }
 
     public void setPollrateDivisor(int pollrateDivisor) {
-        this.pollrateDivisor = pollrateDivisor;
+        //this.pollrateDivisor = pollrateDivisor; //轮询率分频参数固定为1，暂不提供修改，避免误按
     }
 
     public int getDpi() {
