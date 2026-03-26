@@ -9,6 +9,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import com.sun.jna.Callback;
+import com.sun.jna.Memory;
+import com.sun.jna.Native;
+import com.sun.jna.Pointer;
+import com.sun.jna.platform.win32.WinDef.HWND;
+import com.sun.jna.platform.win32.WinDef.LPARAM;
+import com.sun.jna.platform.win32.WinDef.LRESULT;
+import com.sun.jna.platform.win32.WinDef.WPARAM;
+import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.win32.StdCallLibrary;
+import com.sun.jna.win32.W32APIOptions;
+
+import javax.swing.JFrame;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
 public class MouseLocator extends Thread implements MouseListener {
 
     private Config config;
@@ -28,8 +43,135 @@ public class MouseLocator extends Thread implements MouseListener {
         this.config = config;
     }
 
+    // --- 1. JNA 底层 API 映射 (为了不依赖复杂的额外包，这里直接映射) ---
+    public interface User32Ext extends StdCallLibrary {
+        User32Ext INSTANCE = Native.load("user32", User32Ext.class, W32APIOptions.DEFAULT_OPTIONS);
+
+        boolean RegisterRawInputDevices(Memory pRawInputDevices, int uiNumDevices, int cbSize);
+        int GetRawInputData(LPARAM hRawInput, int uiCommand, Pointer pData, IntByReference pcbSize, int cbSizeHeader);
+        
+        // 用于替换窗口消息处理函数的 API (兼容 32/64 位)
+        Pointer SetWindowLongPtr(HWND hWnd, int nIndex, WindowProc wndProc);
+        Pointer SetWindowLong(HWND hWnd, int nIndex, WindowProc wndProc);
+        LRESULT CallWindowProc(Pointer lpPrevWndFunc, HWND hWnd, int Msg, WPARAM wParam, LPARAM lParam);
+    }
+
+    public interface WindowProc extends Callback {
+        LRESULT callback(HWND hwnd, int uMsg, WPARAM wParam, LPARAM lParam);
+    }
+
+    // --- 常量定义 ---
+    private static final int WM_INPUT = 0x00FF;
+    private static final int RID_INPUT = 0x10000003;
+    private static final int RIM_TYPEMOUSE = 0;
+    private static final int GWLP_WNDPROC = -4;
+    private static final int HEADER_SIZE = 8 + (2 * Native.POINTER_SIZE); // 兼容32/64位头部大小
+
+    // 存储转换后的绝对坐标
+    private double currentAbsX = 0;
+    private double currentAbsY = 0;
+
+    // 新增屏幕宽高成员变量
+    private int screenWidth;
+    private int screenHeight;
+
+    // --- 类的成员变量 ---
+    private JFrame targetFrame;
+    private Pointer oldWndProc;
+    private WindowProc customWndProc;
+    
+    // ⭐ 核心：这是连接底层回调和 Java 线程的桥梁
+    private ConcurrentLinkedQueue<Point> mouseEventQueue = new ConcurrentLinkedQueue<>();
+
+    /**
+     * 绑定目标框架函数
+     * @param targetFrame 你的主窗口 (确保传入前已经调用过 targetFrame.setVisible(true))
+     */
+    public void bindTargetFrame(JFrame targetFrame) {
+        this.targetFrame = targetFrame;
+    }
+
+    /**
+     * 核心初始化逻辑：注册原始输入并拦截 JFrame 消息
+     */
+    private void initNativeHook() {
+        // 1. 获取 JFrame 的底层 Windows 句柄 (HWND)
+        HWND hwnd = new HWND(Native.getComponentPointer(targetFrame));
+
+        // 2. 注册 Raw Input (请求主板把鼠标数据发给这个 HWND)
+        int ridSize = 4 + 4 + Native.POINTER_SIZE;
+        Memory rid = new Memory(ridSize);
+        rid.clear();
+        rid.setShort(0, (short) 0x01); // UsagePage: Generic Desktop Controls
+        rid.setShort(2, (short) 0x02); // Usage: Mouse
+        rid.setInt(4, 0x00000100);     // RIDEV_INPUTSINK (即使失去焦点也能接收数据)
+        rid.setPointer(8, hwnd.getPointer());
+
+        boolean success = User32Ext.INSTANCE.RegisterRawInputDevices(rid, 1, ridSize);
+        if (!success) {
+            System.err.println("注册 Raw Input 失败！请检查权限或环境。");
+            return;
+        }
+
+        // 3. 预先分配好内存，避免在 8000Hz 频率下产生 GC
+        final Memory rawInputBuffer = new Memory(64);
+        final IntByReference pcbSize = new IntByReference();
+
+        // 获取一次当前系统鼠标的真实位置作为起点
+        Point startPoint = java.awt.MouseInfo.getPointerInfo().getLocation();
+        currentAbsX = startPoint.x;
+        currentAbsY = startPoint.y;
+
+        // 获取主屏幕的分辨率
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        screenWidth = screenSize.width;
+        screenHeight = screenSize.height;
+
+        // 4. 定义底层消息拦截器 (当收到消息时，生成 Point 并放入队列)
+        customWndProc = new WindowProc() {
+            @Override
+            public LRESULT callback(HWND h, int uMsg, WPARAM wParam, LPARAM lParam) {
+                if (uMsg == WM_INPUT) {
+                    // 提取原始输入数据
+                    User32Ext.INSTANCE.GetRawInputData(lParam, RID_INPUT, null, pcbSize, HEADER_SIZE);
+                    User32Ext.INSTANCE.GetRawInputData(lParam, RID_INPUT, rawInputBuffer, pcbSize, HEADER_SIZE);
+
+                    if (rawInputBuffer.getInt(0) == RIM_TYPEMOUSE) { // 判断是否为鼠标数据
+                        // 偏移量 12 和 16 分别是相对位移 lLastX 和 lLastY
+                        int deltaX = rawInputBuffer.getInt(HEADER_SIZE + 12);
+                        int deltaY = rawInputBuffer.getInt(HEADER_SIZE + 16);
+
+                        // 将物理偏移量累加到我们的绝对坐标上
+                        currentAbsX += deltaX;
+                        currentAbsY += deltaY;
+
+                        // 限制 X Y 坐标不超过屏幕的宽高
+                        currentAbsX = Math.max(0, Math.min(screenWidth - 1, currentAbsX));
+                        currentAbsY = Math.max(0, Math.min(screenHeight - 1, currentAbsY));
+
+                        // 将计算好的绝对坐标转成 Point 放进队列供线程消费
+                        mouseEventQueue.offer(new Point((int)currentAbsX, (int)currentAbsY));
+                    }
+                }
+                // 重要：必须调用原有的 WndProc，否则 JFrame 会假死崩溃
+                return User32Ext.INSTANCE.CallWindowProc(oldWndProc, h, uMsg, wParam, lParam);
+            }
+        };
+
+        // 5. 将拦截器挂载到 JFrame 上 (兼容 32位和64位 JDK)
+        if (Native.POINTER_SIZE == 8) {
+            oldWndProc = User32Ext.INSTANCE.SetWindowLongPtr(hwnd, GWLP_WNDPROC, customWndProc);
+        } else {
+            oldWndProc = User32Ext.INSTANCE.SetWindowLong(hwnd, GWLP_WNDPROC, customWndProc);
+        }
+    }
+
     @Override
     public void run() {
+        // 新方法，先在线程启动时注册底层 Hook
+        initNativeHook();
+
+        //每秒更新一次轮询率的线程，此线程睡眠中被调用 interrupt 会立刻走 catch 所以 catch 里再等1s重走逻辑
         pollingRateMeasurerThread = new Thread(() -> {
             while (!Thread.interrupted()) {
                 try {
@@ -38,6 +180,7 @@ public class MouseLocator extends Thread implements MouseListener {
                     //e.printStackTrace();
                      try {
                         mouseUpdateCounter = 0;
+                        mouseEventQueue.clear();
                         Thread.sleep(1000);
                     } catch (InterruptedException e2) {
                     }
@@ -50,10 +193,9 @@ public class MouseLocator extends Thread implements MouseListener {
         }, "PollingRateMeasurer");
         pollingRateMeasurerThread.start();
 
-
         Point currentPosition = null;
         int pollSkipping = 1;
-        int pollsBeforeUpdate = 0;
+
         while (!Thread.interrupted()) {
             while (paused) {
                 try {
@@ -63,16 +205,17 @@ public class MouseLocator extends Thread implements MouseListener {
                 }
             }
 
-            currentPosition = MouseInfo.getPointerInfo().getLocation();
-            pollsBeforeUpdate++;
-            if (mouseUpdate == null || !currentPosition.equals(mouseUpdate.getPosition())) {
+            // 旧方法，读取系统转化过后的绝对坐标
+            //currentPosition = MouseInfo.getPointerInfo().getLocation();
+            
+            // 新方法，HOOK 读取 HID 底层原始 delta 报文转换成绝对坐标入队列，再从队列中读取消费 Point 对象
+            currentPosition = mouseEventQueue.poll();
+
+            // if (mouseUpdate == null || !currentPosition.equals(mouseUpdate.getPosition())) {
+            if (currentPosition != null) {
                 mouseUpdate = new MouseUpdate(System.nanoTime(), currentPosition,
                         config.getDpi(), currentPollingRate, mouseUpdate, buttonsPressed.toArray(new Integer[0]));
-//                if (mouseUpdate.getTimeSinceLastUpdate() > 2000000) {
-//                    System.out.println(mouseUpdate.getTimeSinceLastUpdate() / (float) 1000000 + " ms " + pollsBeforeUpdate);
-//                }
 
-                pollsBeforeUpdate = 0;
                 if (pollSkipping < config.getPollrateDivisor()) {
                     pollSkipping++;
                 } else {

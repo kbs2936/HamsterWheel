@@ -47,6 +47,7 @@ public class Controller {
         loadConfig();
         loadMouseLocator();
         loadFrame();
+        mouseLocator.bindTargetFrame(gui);
         mouseLocator.start();
 
         Log.addStatConsumer(gui::addStatsLog);
@@ -75,7 +76,7 @@ public class Controller {
         mouseLocator = new MouseLocator(
                 mouseUpdate -> {
                     gui.handleMouseUpdate(mouseUpdate);
-                    Log.stats(mouseUpdate, config.isEnableStatisticsLogging());
+                    //Log.stats(mouseUpdate, config.isEnableStatisticsLogging());
                 }, config);
         Log.info("Mouse analyser thread started");
     }
