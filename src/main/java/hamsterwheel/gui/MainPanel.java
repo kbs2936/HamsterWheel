@@ -38,6 +38,7 @@ public class MainPanel extends JPanel implements KeyListener {
 
     private List<String> statsLogs = Collections.synchronizedList(new ArrayList<>());
     private List<String> debugLogs = Collections.synchronizedList(new ArrayList<>());
+    private Thread paintFrequencyCounterThread;
 
 
     public MainPanel(MouseLocator mouseLocator, MouseListener mouseListener, Config config) throws AWTException {
@@ -62,7 +63,7 @@ public class MainPanel extends JPanel implements KeyListener {
             calculateAcceleration(mouseUpdate.getPosition(), mouseUpdate.getPrevious().getPosition());
         this.pollingRate = mouseUpdate.getPollingRate();
         if (pollingRate > maxPollingRate) maxPollingRate = pollingRate;
-        calculateAveragePollingRate(pollingRate);
+        //calculateAveragePollingRate(pollingRate);
         calculatePollingRateClass(pollingRate);
         positionCnt++;
     }
@@ -115,9 +116,9 @@ public class MainPanel extends JPanel implements KeyListener {
             if (mouseUpdateFrequency < pollRateClassLimit) {
                 if (pollRateClass > this.pollingRateClass) {
                     this.pollingRateClass = pollRateClass;
-                    totalRate = 0;
-                    totalCnt = 0;
-                    avgPollingRate = 0;
+                    // totalRate = 0;
+                    // totalCnt = 0;
+                    // avgPollingRate = 0;
                 } else {
                     break;
                 }
@@ -173,17 +174,28 @@ public class MainPanel extends JPanel implements KeyListener {
     }
 
     private void startPaintFrequencyCounterThread() {
-        new Thread(() -> {
+        paintFrequencyCounterThread = new Thread(() -> {
             while (!Thread.interrupted()) {
-                fps = repaintCounter;
-                repaintCounter = 0;
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    //e.printStackTrace();
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e2) {
+                    }
+                }
+                fps = repaintCounter;
+                repaintCounter = 0;
+                // 非暂停状态下，每秒更新一次时间和平均轮询率
+                if (!mouseLocator.isPaused()) {
+                    totalCnt++;
+                    avgPollingRate = positionCnt / totalCnt;
+                    avgPollingRate = (avgPollingRate > 8000) ? 8000 : avgPollingRate;
                 }
             }
-        }).start();
+        });
+        paintFrequencyCounterThread.start();
     }
 
     @Override
@@ -234,8 +246,9 @@ public class MainPanel extends JPanel implements KeyListener {
         if (config.isShowTitlePanel()) {
             stringBuilder.append("│ Version              %8s                         │\n".formatted(Controller.VERSION));
             stringBuilder.append("│                                                       │\n");
-            stringBuilder.append("│ Made with love by LiuHuang                            │\n");
-            stringBuilder.append("│ Position Count       %8d                         │\n".formatted(positionCnt));
+            //stringBuilder.append("│ Made with love by LiuHuang                            │\n");
+            stringBuilder.append("│ Time(s)               %8d                        │\n".formatted(totalCnt));
+            stringBuilder.append("│ Position Counts       %8d                        │\n".formatted(positionCnt));
         }
         stringBuilder.append("└───────────────────────────────────────────────────────┘\n");
         stringBuilder.append("\n");
@@ -547,6 +560,8 @@ public class MainPanel extends JPanel implements KeyListener {
         totalRate = 0;
         totalCnt = 0;
         positionCnt = 0;
+        mouseLocator.resetMeasurerThread();
+        paintFrequencyCounterThread.interrupt();
     }
 
     private Point scalePosition(Point position) {

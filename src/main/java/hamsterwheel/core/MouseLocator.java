@@ -32,13 +32,20 @@ public class MouseLocator extends Thread implements MouseListener {
     public void run() {
         pollingRateMeasurerThread = new Thread(() -> {
             while (!Thread.interrupted()) {
-                currentPollingRate = mouseUpdateCounter;
-                mouseUpdateCounter = 0;
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    //e.printStackTrace();
+                     try {
+                        mouseUpdateCounter = 0;
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e2) {
+                    }
                 }
+                //每个捕获到的鼠标点都会被 accept 带一堆参数更新到 MainFrame 那边，但是轮训率这个参数每秒只更新一次
+                currentPollingRate = mouseUpdateCounter;
+                mouseUpdateCounter = 0;
+                currentPollingRate = (currentPollingRate > 8000) ? 8000 : currentPollingRate;
             }
         }, "PollingRateMeasurer");
         pollingRateMeasurerThread.start();
@@ -98,6 +105,10 @@ public class MouseLocator extends Thread implements MouseListener {
 
     public void setPaused(boolean paused) {
         this.paused = paused;
+    }
+
+    public void resetMeasurerThread() {
+        pollingRateMeasurerThread.interrupt();
     }
 
     @Override

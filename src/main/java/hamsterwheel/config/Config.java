@@ -53,7 +53,7 @@ public class Config {
         UIMultiplier = 3;
         darkMode = true;
         maxFPS = 120;
-        drawTrail = false;
+        drawTrail = true;
         drawCoordinates = false;
         drawInchGrid = false;
         drawPixelGrid = false;
