@@ -56,3 +56,7 @@ jlink --output hamsterwheel-jre-runtime --add-modules java.desktop
 1. 先安装 JDK 环境（OpenJDK21U-jdk_x64_windows_hotspot_21.0.7_6.msi，执行最终程序所需的 JRE 环境也可以安装此包）
 2. VSCode 导出 jar 包，主类选 Controller，下一步选 target/classes，导出后可以测试一下jar包  java -jar xxx.jar
 3. 打开 Launch4j.exe 的 Basic 页面填写一下生成文件的路径.exe 和 选一下上一步生成的 jar 包路径，再点击上部设置图标选一下根目录下的 execonfig.xml文件即可生成单个可执行的exe文件
+
+### 5. 使用此软件注意事项：
+1. 退出飞书等其他大型软件，否则会影响执行效率导致回报率上不去
+2. Win10系统设置关闭“提高指针精确度”，Win11系统设置关闭“增强指针精度”，不关闭不影响测试数据，只是光标和轨迹不够贴合
