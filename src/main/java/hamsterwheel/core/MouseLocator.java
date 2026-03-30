@@ -141,6 +141,25 @@ public class MouseLocator extends Thread implements MouseListener {
                         int deltaX = rawInputBuffer.getInt(HEADER_SIZE + 12);
                         int deltaY = rawInputBuffer.getInt(HEADER_SIZE + 16);
 
+                        /* TODO:增加过滤全零包的逻辑，暂不开放，后面用1个ConfigIO中已有的变量来控制是否过滤全零包
+                        // 读取按键标志位 (usButtonFlags 在结构体中的偏移量是 4，占用 2 字节)
+                        short buttonFlags = rawInputBuffer.getShort(HEADER_SIZE + 4);
+
+                        // 全零包过滤逻辑，如果 X 和 Y 都没有移动，并且没有任何按键操作，则彻底抛弃这个包
+                        if (deltaX == 0 && deltaY == 0 && buttonFlags == 0) {
+                            // 这是为了填充 8K 轮询率产生的废包，直接跳过处理！
+                        } else {
+                            // TODO:这里将来如果开放，后面的的逻辑的记得屏蔽
+                            // 将物理偏移量累加到我们的绝对坐标上,限制 X Y 坐标不超过屏幕的宽高后入队列
+                            currentAbsX += deltaX;
+                            currentAbsY += deltaY;
+                            currentAbsX = Math.max(0, Math.min(screenWidth - 1, currentAbsX));
+                            currentAbsY = Math.max(0, Math.min(screenHeight - 1, currentAbsY));
+                            mouseEventQueue.offer(new Point((int)currentAbsX, (int)currentAbsY));
+                        }
+                        */
+
+                        // TODO:将来如果做了过滤全零包的功能，这下面的逻辑记得删除
                         // 将物理偏移量累加到我们的绝对坐标上
                         currentAbsX += deltaX;
                         currentAbsY += deltaY;
@@ -148,7 +167,7 @@ public class MouseLocator extends Thread implements MouseListener {
                         // 限制 X Y 坐标不超过屏幕的宽高
                         currentAbsX = Math.max(0, Math.min(screenWidth - 1, currentAbsX));
                         currentAbsY = Math.max(0, Math.min(screenHeight - 1, currentAbsY));
-
+                        
                         // 将计算好的绝对坐标转成 Point 放进队列供线程消费
                         mouseEventQueue.offer(new Point((int)currentAbsX, (int)currentAbsY));
                     }
