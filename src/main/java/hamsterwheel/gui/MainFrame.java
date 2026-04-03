@@ -42,6 +42,7 @@ public class MainFrame extends JFrame {
         this.add(mainPanel);
         this.addKeyListener(mainPanel);
 
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
         setVisible(true);
     }
 
