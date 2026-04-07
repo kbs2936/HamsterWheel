@@ -23,7 +23,7 @@ public class MainFrame extends JFrame {
             e.printStackTrace();
         }
 
-        setTitle("MouseX   " + Controller.VERSION);
+        setTitle("MouseX   " + Controller.VERSION + "   <by LH>");
 
         // call custom exit function after closing JFrame
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);

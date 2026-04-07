@@ -67,9 +67,9 @@ public class MouseLocator extends Thread implements MouseListener {
     private static final int GWLP_WNDPROC = -4;
     private static final int HEADER_SIZE = 8 + (2 * Native.POINTER_SIZE); // 兼容32/64位头部大小
 
-    // 存储转换后的绝对坐标
-    private double currentAbsX = 0;
-    private double currentAbsY = 0;
+    // 存储转换后的绝对坐标 (必须加上 volatile 保证多线程可见性)
+    private volatile double currentAbsX = 0;
+    private volatile double currentAbsY = 0;
 
     // 新增屏幕宽高成员变量
     private int screenWidth;
@@ -215,6 +215,10 @@ public class MouseLocator extends Thread implements MouseListener {
         Point currentPosition = null;
         int pollSkipping = 1;
 
+        // 自动校准的控制变量
+        long lastInputTime = System.currentTimeMillis();
+        boolean needsCalibration = false;
+
         while (!Thread.interrupted()) {
             while (paused) {
                 try {
@@ -229,6 +233,8 @@ public class MouseLocator extends Thread implements MouseListener {
             
             // 新方法，HOOK 读取 HID 底层原始 delta 报文转换成绝对坐标入队列，再从队列中读取消费 Point 对象
             currentPosition = mouseEventQueue.poll();
+            
+            long currentTime = System.currentTimeMillis();
 
             // if (mouseUpdate == null || !currentPosition.equals(mouseUpdate.getPosition())) {
             if (currentPosition != null) {
@@ -242,7 +248,24 @@ public class MouseLocator extends Thread implements MouseListener {
                     positionConsumer.accept(mouseUpdate);
                     pollSkipping = 1;
                 }
-            }
+                // 核心防抖逻辑：只要收到了报文，永远重置最后移动时间！
+                lastInputTime = currentTime;
+                needsCalibration = true;
+            } else {
+                // ----- 队列为空，代表鼠标此刻停顿了 ----- 检查：如果之前动过(需要校准)，并且距离最后一次报文已经超过了 160ms
+                if (needsCalibration && (currentTime - lastInputTime > 160)) {
+                    // 1. 获取系统真实光标位置（这个耗时操作完美避开了高速画圈期）
+                    java.awt.Point sysPoint = java.awt.MouseInfo.getPointerInfo().getLocation();
+
+                    // 2. 强行跨线程覆写底层的绝对物理坐标！
+                    // (因为 100ms 没收到报文，此时 JNA 线程处于绝对休眠期，此时覆写没有任何并发冲突风险)
+                    currentAbsX = sysPoint.x;
+                    currentAbsY = sysPoint.y;
+
+                    // 3. 标记为已校准，只要鼠标不挪动，就绝不再执行获取
+                    needsCalibration = false;
+                }
+            } 
         }
         pollingRateMeasurerThread.interrupt();
     }
